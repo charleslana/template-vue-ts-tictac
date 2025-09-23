@@ -6,6 +6,7 @@ export class TextureManager {
         this.createOTexture(scene);
         this.createCellTexture(scene);
         this.createCellHoverTexture(scene);
+        this.createCardTextures(scene);
     }
 
     private static createXTexture(scene: Phaser.Scene): void {
@@ -79,5 +80,57 @@ export class TextureManager {
             GameConstants.CELL_SIZE
         );
         cellHoverGraphics.destroy();
+    }
+
+    private static createCardTextures(scene: Phaser.Scene): void {
+        // Textura de fundo da carta
+        const cardGraphics = scene.add.graphics();
+        cardGraphics.fillStyle(GameConstants.COLORS.CARD_BG, 0.9);
+        cardGraphics.fillRoundedRect(
+            0,
+            0,
+            GameConstants.CARD_WIDTH,
+            GameConstants.CARD_HEIGHT,
+            8
+        );
+        cardGraphics.lineStyle(2, GameConstants.COLORS.CARD_BORDER);
+        cardGraphics.strokeRoundedRect(
+            0,
+            0,
+            GameConstants.CARD_WIDTH,
+            GameConstants.CARD_HEIGHT,
+            8
+        );
+        cardGraphics.generateTexture(
+            "card-bg",
+            GameConstants.CARD_WIDTH,
+            GameConstants.CARD_HEIGHT
+        );
+        cardGraphics.destroy();
+
+        // Textura de carta selecionada
+        const cardSelectedGraphics = scene.add.graphics();
+        cardSelectedGraphics.fillStyle(GameConstants.COLORS.CARD_BG, 0.9);
+        cardSelectedGraphics.fillRoundedRect(
+            0,
+            0,
+            GameConstants.CARD_WIDTH,
+            GameConstants.CARD_HEIGHT,
+            8
+        );
+        cardSelectedGraphics.lineStyle(3, GameConstants.COLORS.CARD_SELECTED);
+        cardSelectedGraphics.strokeRoundedRect(
+            0,
+            0,
+            GameConstants.CARD_WIDTH,
+            GameConstants.CARD_HEIGHT,
+            8
+        );
+        cardSelectedGraphics.generateTexture(
+            "card-selected",
+            GameConstants.CARD_WIDTH,
+            GameConstants.CARD_HEIGHT
+        );
+        cardSelectedGraphics.destroy();
     }
 }

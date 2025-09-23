@@ -1,8 +1,10 @@
 import * as Phaser from "phaser";
 import { GameBoard } from "../board/GameBoard";
 import { AIPlayer } from "../ai/AIPlayer";
+import { CardSystem } from "../cards/CardSystem";
 import { CharacterManager } from "../characters/Character";
 import { UIManager } from "../ui/UIManager";
+import { CardUI } from "../ui/CardUI";
 import { EffectsManager } from "../effects/EffectsManager";
 import { TextureManager } from "../effects/TextureManager";
 import {
@@ -10,6 +12,7 @@ import {
     PlayerType,
     GameScore,
     Character,
+    // Card,
 } from "../types/GameTypes";
 import { GameConstants } from "../constants/GameConstants";
 
@@ -17,12 +20,15 @@ export class TicTacToeScene extends Phaser.Scene {
     // Core game systems
     private gameBoard!: GameBoard;
     private aiPlayer!: AIPlayer;
+    private cardSystem!: CardSystem;
     private uiManager!: UIManager;
+    private cardUI!: CardUI;
     private effectsManager!: EffectsManager;
 
     // Game state
     private currentState: GameState = GameState.WAITING_PLAYER;
     private score: GameScore = { player: 0, ai: 0, ties: 0 };
+    private cardPlayed: boolean = false;
 
     // Game objects
     private marks: Phaser.GameObjects.Image[] = [];
@@ -42,6 +48,7 @@ export class TicTacToeScene extends Phaser.Scene {
         this.initializeGame();
         this.createGameElements();
         this.setupEventListeners();
+        this.startNewRound();
         this.handleResize();
     }
 
@@ -52,23 +59,30 @@ export class TicTacToeScene extends Phaser.Scene {
     private initializeManagers(): void {
         this.gameBoard = new GameBoard();
         this.aiPlayer = new AIPlayer(1);
+        this.cardSystem = new CardSystem();
         this.uiManager = new UIManager(this);
+        this.cardUI = new CardUI(this);
         this.effectsManager = new EffectsManager(this);
     }
 
     private initializeGame(): void {
         this.currentState = GameState.WAITING_PLAYER;
         this.score = { player: 0, ai: 0, ties: 0 };
+        this.cardPlayed = false;
     }
 
     private createGameElements(): void {
         this.effectsManager.createBackground();
         this.createCharacters();
-        this.uiManager.createUI(() => this.resetGame());
+        this.uiManager.createUI(
+            () => this.resetGame(),
+            () => this.handleEndTurn()
+        );
         this.createGameBoard();
     }
 
     private createCharacters(): void {
+        // Reposicionar personagens para dar espaço para as cartas
         this.playerCharacter = CharacterManager.createCharacter(
             this,
             200,
@@ -89,6 +103,22 @@ export class TicTacToeScene extends Phaser.Scene {
             3,
             0,
             "INIMIGO"
+        );
+    }
+
+    private startNewRound(): void {
+        // Comprar cartas iniciais
+        const playerCards = this.cardSystem.drawInitialHand(true);
+        const aiCards = this.cardSystem.drawInitialHand(false);
+
+        // Atualizar UI das cartas
+        this.cardUI.updateHandDisplay(playerCards, true);
+        this.cardUI.updateHandDisplay(aiCards, false);
+
+        this.currentState = GameState.WAITING_PLAYER;
+        this.uiManager.updateStatus(
+            "Sua vez! Arraste uma carta para o tabuleiro",
+            GameConstants.COLORS.TEXT_YELLOW
         );
     }
 
@@ -122,54 +152,142 @@ export class TicTacToeScene extends Phaser.Scene {
         cell: Phaser.GameObjects.Image,
         index: number
     ): void {
-        cell.on("pointerover", () => {
+        // Configurar zona de drop para cartas
+        cell.setInteractive({ dropZone: true });
+
+        cell.on(
+            "drop",
+            (
+                _pointer: Phaser.Input.Pointer,
+                gameObject: Phaser.GameObjects.Container
+            ) => {
+                this.handleCardDrop(index, gameObject);
+            }
+        );
+
+        cell.on("dragenter", () => {
             if (
                 this.gameBoard.isValidMove(index) &&
-                this.currentState === GameState.WAITING_PLAYER
+                this.currentState === GameState.WAITING_PLAYER &&
+                this.cardUI.isCardBeingDragged()
             ) {
                 cell.setTexture("cell-hover");
             }
         });
 
-        cell.on("pointerout", () => {
-            if (
-                this.gameBoard.isValidMove(index) &&
-                this.currentState === GameState.WAITING_PLAYER
-            ) {
+        cell.on("dragleave", () => {
+            if (this.gameBoard.isValidMove(index)) {
                 cell.setTexture("cell");
             }
         });
-
-        cell.on("pointerdown", () => {
-            this.handlePlayerMove(index);
-        });
     }
 
-    private setupEventListeners(): void {
-        this.scale.on("resize", this.handleResize, this);
-    }
-
-    private handlePlayerMove(index: number): void {
+    private handleCardDrop(
+        index: number,
+        _cardContainer: Phaser.GameObjects.Container
+    ): void {
         if (
             this.currentState !== GameState.WAITING_PLAYER ||
-            !this.gameBoard.isValidMove(index)
+            !this.gameBoard.isValidMove(index) ||
+            this.cardPlayed
         ) {
             return;
         }
-        this.makeMove(index, PlayerType.HUMAN);
+
+        const selectedCard = this.cardUI.getSelectedCard();
+        if (!selectedCard) {
+            return;
+        }
+
+        // Jogar a carta
+        const playedCard = this.cardSystem.playCard(selectedCard.id, true);
+        if (playedCard) {
+            this.makeMove(index, PlayerType.HUMAN);
+            this.cardUI.removeCard(playedCard.id);
+            this.cardPlayed = true;
+
+            // Habilitar botão de finalizar turno
+            this.uiManager.setEndTurnButtonEnabled(true);
+            this.uiManager.updateStatus(
+                "Carta jogada! Clique em 'Finalizar Turno'",
+                GameConstants.COLORS.TEXT_GREEN
+            );
+        }
     }
 
-    private handleAIMove(): void {
-        if (this.currentState !== GameState.AI_THINKING) return;
-        const bestMove = this.aiPlayer.getBestMove(this.gameBoard.board);
-        this.makeMove(bestMove, PlayerType.AI);
+    private handleEndTurn(): void {
+        if (!this.cardPlayed) {
+            return;
+        }
+
+        this.cardPlayed = false;
+        this.uiManager.setEndTurnButtonEnabled(false);
+
+        // Comprar nova carta se necessário
+        const newCard = this.cardSystem.drawCard(true);
+        if (newCard) {
+            this.cardUI.updateHandDisplay(this.cardSystem.getHand(true), true);
+        }
+
+        // Verificar resultado do jogo antes de passar o turno
+        const result = this.gameBoard.checkWinner();
+        if (result.winner !== PlayerType.NONE && result.lines.length > 0) {
+            this.handleLineCompletion(result.winner, result.lines);
+            return;
+        } else if (this.gameBoard.isFull()) {
+            this.handleTie();
+            return;
+        }
+
+        // Turno da IA
+        this.handleAITurn();
+    }
+
+    private handleAITurn(): void {
+        this.currentState = GameState.AI_THINKING;
+        this.uiManager.updateStatus("IA pensando...");
+
+        this.time.delayedCall(1000, () => {
+            // IA escolhe uma carta aleatória da mão
+            const aiHand = this.cardSystem.getHand(false);
+            if (aiHand.length > 0) {
+                const randomCard =
+                    aiHand[Math.floor(Math.random() * aiHand.length)];
+                const playedCard = this.cardSystem.playCard(
+                    randomCard.id,
+                    false
+                );
+
+                if (playedCard) {
+                    this.cardUI.removeCard(playedCard.id);
+
+                    // IA faz sua jogada
+                    const bestMove = this.aiPlayer.getBestMove(
+                        this.gameBoard.board
+                    );
+                    this.makeMove(bestMove, PlayerType.AI);
+
+                    // IA compra nova carta
+                    const newCard = this.cardSystem.drawCard(false);
+                    if (newCard) {
+                        this.cardUI.updateHandDisplay(
+                            this.cardSystem.getHand(false),
+                            false
+                        );
+                    }
+                }
+            }
+        });
     }
 
     private makeMove(index: number, player: PlayerType): void {
         if (!this.gameBoard.makeMove(index, player)) return;
 
         this.createMoveAnimation(index, player);
-        this.checkGameResult(player);
+
+        if (player === PlayerType.AI) {
+            this.checkGameResultForAI();
+        }
     }
 
     private createMoveAnimation(index: number, player: PlayerType): void {
@@ -186,9 +304,12 @@ export class TicTacToeScene extends Phaser.Scene {
 
         this.marks.push(mark);
         this.effectsManager.createScaleAnimation(mark);
+
+        // Restaurar textura da célula
+        cell.setTexture("cell");
     }
 
-    private checkGameResult(player: PlayerType): void {
+    private checkGameResultForAI(): void {
         const result = this.gameBoard.checkWinner();
 
         if (result.winner !== PlayerType.NONE && result.lines.length > 0) {
@@ -196,21 +317,13 @@ export class TicTacToeScene extends Phaser.Scene {
         } else if (this.gameBoard.isFull()) {
             this.handleTie();
         } else {
-            this.continueGame(player);
-        }
-    }
-
-    private continueGame(player: PlayerType): void {
-        if (player === PlayerType.HUMAN) {
-            this.currentState = GameState.AI_THINKING;
-            this.uiManager.updateStatus("IA pensando...");
-            this.time.delayedCall(500, () => this.handleAIMove());
-        } else {
+            // Voltar para o turno do jogador
             this.currentState = GameState.WAITING_PLAYER;
             this.uiManager.updateStatus(
-                "Sua vez! (X)",
+                "Sua vez! Arraste uma carta para o tabuleiro",
                 GameConstants.COLORS.TEXT_YELLOW
             );
+            this.cardUI.clearSelectedCard();
         }
     }
 
@@ -292,7 +405,26 @@ export class TicTacToeScene extends Phaser.Scene {
         this.time.delayedCall(800, () => {
             this.gameBoard.clearLines(lines);
             this.restoreClearedCells(cellsToClear);
+
+            // Verificar se precisa reembaralhar e comprar cartas
+            this.refillHandsAfterScore();
         });
+    }
+
+    private refillHandsAfterScore(): void {
+        const playerCards = this.cardSystem.refillHandAfterScore(true);
+        const aiCards = this.cardSystem.refillHandAfterScore(false);
+
+        if (playerCards.length > 0) {
+            this.cardUI.updateHandDisplay(this.cardSystem.getHand(true), true);
+        }
+
+        if (aiCards.length > 0) {
+            this.cardUI.updateHandDisplay(
+                this.cardSystem.getHand(false),
+                false
+            );
+        }
     }
 
     private restoreClearedCells(cellsToClear: Set<number>): void {
@@ -336,9 +468,11 @@ export class TicTacToeScene extends Phaser.Scene {
     private continueCombat(): void {
         this.currentState = GameState.WAITING_PLAYER;
         this.uiManager.updateStatus(
-            "Sua vez! (X)",
+            "Sua vez! Arraste uma carta para o tabuleiro",
             GameConstants.COLORS.TEXT_YELLOW
         );
+        this.cardPlayed = false;
+        this.uiManager.setEndTurnButtonEnabled(false);
     }
 
     private handleGameEnd(): void {
@@ -360,6 +494,7 @@ export class TicTacToeScene extends Phaser.Scene {
 
         this.uiManager.updateScore(this.score);
         this.uiManager.animateStatusText();
+        this.uiManager.setEndTurnButtonEnabled(false);
     }
 
     private handleTie(): void {
@@ -373,6 +508,7 @@ export class TicTacToeScene extends Phaser.Scene {
     private resetBoardOnly(): void {
         this.gameBoard.reset();
         this.currentState = GameState.WAITING_PLAYER;
+        this.cardPlayed = false;
 
         this.marks.forEach((mark) => mark.destroy());
         this.marks = [];
@@ -383,16 +519,20 @@ export class TicTacToeScene extends Phaser.Scene {
         });
 
         this.uiManager.updateStatus(
-            "Sua vez! (X)",
+            "Sua vez! Arraste uma carta para o tabuleiro",
             GameConstants.COLORS.TEXT_YELLOW
         );
         this.uiManager.resetStatusScale();
+        this.uiManager.setEndTurnButtonEnabled(false);
     }
 
     private resetGame(): void {
         this.effectsManager.clearAllAnimations();
+        this.cardUI.clearAllCards();
         this.resetBoardOnly();
         this.resetCharacters();
+        this.cardSystem.reset();
+        this.startNewRound();
     }
 
     private resetCharacters(): void {
@@ -409,6 +549,10 @@ export class TicTacToeScene extends Phaser.Scene {
         CharacterManager.updateCharacterUI(this.enemyCharacter);
     }
 
+    private setupEventListeners(): void {
+        this.scale.on("resize", this.handleResize, this);
+    }
+
     private handleResize(): void {
         const width = this.scale.width;
         const height = this.scale.height;
@@ -416,6 +560,8 @@ export class TicTacToeScene extends Phaser.Scene {
         this.uiManager?.handleResize();
         this.repositionCharacters(width, height);
         this.repositionGameBoard(width, height);
+        this.cardUI?.repositionCards(true);
+        this.cardUI?.repositionCards(false);
     }
 
     private repositionCharacters(width: number, height: number): void {
@@ -472,6 +618,20 @@ export class TicTacToeScene extends Phaser.Scene {
 
     public getCurrentState(): GameState {
         return this.currentState;
+    }
+
+    public getDeckInfo(): {
+        playerDeck: number;
+        aiDeck: number;
+        playerHand: number;
+        aiHand: number;
+    } {
+        return {
+            playerDeck: this.cardSystem.getDeckCount(true),
+            aiDeck: this.cardSystem.getDeckCount(false),
+            playerHand: this.cardSystem.getHand(true).length,
+            aiHand: this.cardSystem.getHand(false).length,
+        };
     }
 }
 

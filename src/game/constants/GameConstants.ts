@@ -3,6 +3,10 @@ export const GameConstants = {
     CELL_SIZE: 120,
     PADDING: 20,
     DAMAGE_PER_LINE: 3,
+    DECK_SIZE: 12,
+    MAX_HAND_SIZE: 3,
+    CARD_WIDTH: 80,
+    CARD_HEIGHT: 100,
     COLORS: {
         BACKGROUND: 0x1e272e,
         CELL: 0x2f3542,
@@ -19,6 +23,12 @@ export const GameConstants = {
         HEALTH_BAR: 0x2ed573,
         HEALTH_BAR_BG: 0x2f3542,
         DAMAGE_TEXT: 0xff6b6b,
+        CARD_BG: 0x2f3640,
+        CARD_BORDER: 0x57606f,
+        CARD_HOVER: 0x3742fa,
+        CARD_SELECTED: 0x2ed573,
+        END_TURN_BUTTON: 0xff6b6b,
+        END_TURN_BUTTON_HOVER: 0xff5252,
     },
 } as const;
 

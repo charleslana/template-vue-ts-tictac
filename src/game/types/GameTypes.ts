@@ -8,6 +8,12 @@ export enum GameState {
     WAITING_PLAYER = "waiting_player",
     AI_THINKING = "ai_thinking",
     GAME_OVER = "game_over",
+    WAITING_END_TURN = "waiting_end_turn",
+}
+
+export enum CardType {
+    NORMAL_X = "normal_x",
+    NORMAL_O = "normal_o",
 }
 
 export interface GameScore {
@@ -41,4 +47,24 @@ export interface DamageAnimation {
 export interface GameResult {
     winner: PlayerType;
     lines: number[][];
+}
+
+export interface Card {
+    id: string;
+    type: CardType;
+    playerType: PlayerType;
+    name: string;
+    description: string;
+    sprite?: Phaser.GameObjects.Image;
+    container?: Phaser.GameObjects.Container;
+}
+
+export interface DeckState {
+    cards: Card[];
+    discardPile: Card[];
+}
+
+export interface HandState {
+    cards: Card[];
+    maxHandSize: number;
 }
