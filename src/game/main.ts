@@ -4,7 +4,8 @@
 // import { MainMenu } from "./scenes/MainMenu";
 import { AUTO, Game } from "phaser";
 // import { Preloader } from "./scenes/Preloader";
-import { GameConstants, TicTacToeScene } from "./scenes/TicTacToeScene";
+import { TicTacToeScene } from "./scenes/TicTacToeScene";
+import { GameConstants } from "./constants/GameConstants";
 
 const config: Phaser.Types.Core.GameConfig = {
     type: AUTO,
